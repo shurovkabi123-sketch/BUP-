@@ -22,7 +22,15 @@ const Login: React.FC = () => {
         await login(studentId, password);
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      if (err.code === 'auth/user-not-found') {
+        setError('No account found for this Student ID. Please register first.');
+      } else if (err.code === 'auth/wrong-password') {
+        setError('Incorrect password. Please try again.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Invalid Student ID format. Please check for spaces or special characters.');
+      } else {
+        setError(err.message || 'Authentication failed. Please check your credentials.');
+      }
     }
   };
 

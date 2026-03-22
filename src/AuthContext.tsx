@@ -47,21 +47,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (studentId: string, password: string) => {
     // We use a virtual email for Firebase Auth: studentId@bup.edu.bd
-    const email = `${studentId.toLowerCase()}@bup.edu.bd`;
+    const trimmedId = studentId.trim().toLowerCase();
+    const email = `${trimmedId}@bup.edu.bd`;
     await signInWithEmailAndPassword(auth, email, password);
   };
 
   const register = async (studentId: string, password: string, displayName: string, email: string) => {
-    const virtualEmail = `${studentId.toLowerCase()}@bup.edu.bd`;
+    const trimmedId = studentId.trim().toLowerCase();
+    const virtualEmail = `${trimmedId}@bup.edu.bd`;
     const userCredential = await createUserWithEmailAndPassword(auth, virtualEmail, password);
     const firebaseUser = userCredential.user;
 
+    // Automatically make the owner an admin
+    const role = email.toLowerCase().trim() === 'shurovkabi123@gmail.com' ? 'admin' : 'student';
+
     const newProfile: UserProfile = {
       uid: firebaseUser.uid,
-      displayName,
-      email, // Real contact email
-      studentId,
-      role: 'student',
+      displayName: displayName.trim(),
+      email: email.trim(), // Real contact email
+      studentId: trimmedId,
+      role,
     };
     await setDoc(doc(db, 'users', firebaseUser.uid), newProfile);
     setProfile(newProfile);
