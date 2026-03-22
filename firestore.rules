@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required)
+    //   - email: string (required)
+    //   - studentId: string (required)
+    //   - batch: string (optional)
+    //   - photoURL: string (optional)
+    //   - role: string (required, enum: ['student', 'admin'])
+    //
+    // Collection: resources
+    // Document ID: {resourceId}
+    // Fields:
+    //   - title: string (required)
+    //   - type: string (required, enum: ['CT', 'Mid', 'Final', 'Other'])
+    //   - subject: string (required)
+    //   - fileUrl: string (required)
+    //   - uploadedBy: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: reminders
+    // Document ID: {reminderId}
+    // Fields:
+    //   - content: string (required)
+    //   - facultyName: string (required)
+    //   - dueDate: timestamp (required)
+    //   - priority: string (required, enum: ['low', 'medium', 'high'])
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: events
+    // Document ID: {eventId}
+    // Fields:
+    //   - title: string (required)
+    //   - description: string (optional)
+    //   - date: timestamp (required)
+    //   - type: string (required, enum: ['exam', 'class', 'social', 'other'])
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email.matches(".*shurovkabi123@gmail.com") && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email', 'studentId', 'role']) &&
+             data.uid is string &&
+             data.displayName is string && data.displayName.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.studentId is string && data.studentId.size() < 20 &&
+             data.role in ['student', 'admin'];
+    }
+
+    function isValidResource(data) {
+      return data.keys().hasAll(['title', 'type', 'subject', 'fileUrl', 'uploadedBy', 'createdAt']) &&
+             data.title is string && data.title.size() < 200 &&
+             data.type in ['CT', 'Mid', 'Final', 'Other'] &&
+             data.subject is string && data.subject.size() < 100 &&
+             data.fileUrl is string && data.fileUrl.size() < 1000 &&
+             data.uploadedBy == request.auth.uid &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidReminder(data) {
+      return data.keys().hasAll(['content', 'facultyName', 'dueDate', 'priority', 'createdAt']) &&
+             data.content is string && data.content.size() < 1000 &&
+             data.facultyName is string && data.facultyName.size() < 100 &&
+             data.dueDate is timestamp &&
+             data.priority in ['low', 'medium', 'high'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll(['title', 'date', 'type']) &&
+             data.title is string && data.title.size() < 200 &&
+             data.date is timestamp &&
+             data.type in ['exam', 'class', 'social', 'other'];
+    }
+
+    // Rules
+    match /users/{uid} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(uid) && isValidUser(request.resource.data) && request.resource.data.role == 'student';
+      allow update: if (isOwner(uid) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) || isAdmin();
+    }
+
+    match /resources/{resourceId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidResource(request.resource.data);
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.uploadedBy == request.auth.uid);
+    }
+
+    match /reminders/{reminderId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}
